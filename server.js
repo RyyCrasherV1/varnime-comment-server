@@ -8,78 +8,71 @@ const io = new Server(server, {
   cors: { origin: "*" }
 });
 
-// ===== DATA MEMORY (NO DB)
-const users = {};
-const comments = {}; // per episode
+const users = {}; // RAM STORAGE
 
-// ===== ROLE TOKEN (GANTI SENDIRI)
-const OWNER_TOKEN = "OWNER123";
-const ADMIN_TOKEN = "ADMIN123";
-
-// ===== LEVEL SYSTEM
-const levels = [
-  { min: 0, name: "NPC", icon: "🙂" },
-  { min: 10, name: "Knight", icon: "⚔️" },
-  { min: 50, name: "Earl", icon: "🧙" },
-  { min: 150, name: "Duke", icon: "🎩" },
-  { min: 500, name: "King", icon: "👑" },
-  { min: 1000, name: "Emperor", icon: "🔥👑" }
+const LEVELS = [
+  { min: 0, title: "NPC" },
+  { min: 50, title: "Knight ⚔️" },
+  { min: 200, title: "Earl 🧙" },
+  { min: 500, title: "Marquess 🧑‍💼" },
+  { min: 1000, title: "Duke 🏹" },
+  { min: 3000, title: "Archduke ⚔️⚔️" },
+  { min: 5000, title: "King 👑" },
+  { min: 10000, title: "Emperor 👑🔥" }
 ];
 
-function getLevel(count) {
-  return [...levels].reverse().find(l => count >= l.min);
+const ADMINS = ["admin"];
+const OWNERS = ["owner"];
+
+function getAutoTitle(count) {
+  let title = "NPC";
+  for (const lvl of LEVELS) {
+    if (count >= lvl.min) title = lvl.title;
+  }
+  return title;
 }
 
-io.on("connection", socket => {
+io.on("connection", (socket) => {
+  socket.on("comment", (data) => {
+    const name = data.user.toLowerCase();
 
-  socket.on("login", ({ username, episodeId, token }) => {
-    let role = "USER";
-    let badge = "";
-
-    if (token === OWNER_TOKEN) {
-      role = "OWNER";
-      badge = "💀👑";
-    } else if (token === ADMIN_TOKEN) {
-      role = "ADMIN";
-      badge = "🛡️";
+    if (!users[name]) {
+      users[name] = {
+        count: 0,
+        manualTitle: null
+      };
     }
 
-    users[socket.id] = {
-      username,
-      role,
-      badge,
-      count: 0,
-      episodeId
-    };
+    users[name].count++;
 
-    if (!comments[episodeId]) comments[episodeId] = [];
-  });
+    let role = "User";
+    if (OWNERS.includes(name)) role = "Owner 👑";
+    else if (ADMINS.includes(name)) role = "Admin 🛡️";
 
-  socket.on("comment", text => {
-    const user = users[socket.id];
-    if (!user) return;
-
-    user.count++;
-
-    const level = getLevel(user.count);
-    const data = {
-      user: user.username,
-      role: user.role === "USER" ? level.name : user.role,
-      icon: user.role === "USER" ? level.icon : user.badge,
-      text
-    };
-
-    comments[user.episodeId].push(data);
+    const autoTitle = getAutoTitle(users[name].count);
+    const title = users[name].manualTitle || autoTitle;
 
     io.emit("comment", {
-      episodeId: user.episodeId,
-      ...data
+      user: data.user,
+      text: data.text,
+      title,
+      role
     });
   });
 
-  socket.on("disconnect", () => {
-    delete users[socket.id];
+  // ADMIN / OWNER SET TITLE
+  socket.on("setTitle", (data) => {
+    if (!OWNERS.includes(data.by)) return;
+
+    const target = data.target.toLowerCase();
+    if (!users[target]) users[target] = { count: 0 };
+
+    users[target].manualTitle = data.title;
+
+    socket.emit("system", {
+      msg: `Title ${data.title} diberikan ke ${data.target}`
+    });
   });
 });
 
-server.listen(process.env.PORT || 3000);
+server.listen(process.env.PORT || 8080);

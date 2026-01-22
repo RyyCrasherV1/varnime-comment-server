@@ -4,6 +4,18 @@ const { Server } = require("socket.io");
 
 const app = express();
 const server = http.createServer(app);
+const io = new Server(server, { cors:{origin:"*"} });
+
+io.on("connection", socket => {
+  socket.on("comment", d => io.emit("comment", d));
+});
+
+server.listen(8080, ()=>console.log("RUN 8080")); express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+
+const app = express();
+const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: "*" }
 });
